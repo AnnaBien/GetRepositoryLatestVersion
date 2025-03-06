@@ -26,7 +26,6 @@ def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
     except ContainerError:
         raise SystemExit(f'Could not connect to the repository: {repo_url}')
 
-    print(tags)
     tags = [tag for tag in tags.decode("utf-8").split('\r\n') if tag_regex.match(tag)]
     if not tags:
         raise SystemExit(f'No relevant tags downloaded for repository: {repo_url}')
@@ -64,6 +63,7 @@ def _create_regex_from_current_version(current_version: str = None) -> re.Patter
 def _find_latest_version(tags: tuple, current_version: str = None) -> str | None:
     """
     Compare versions between tags following MAJOR.MINOR.PATCH style.
+    Note: Only versions compliant with Semantic Versioning 2.0.0 will be compared.
 
     :param tags: (tuple) Downloaded tags
     :param current_version: (str, Optional) Currently used tag
