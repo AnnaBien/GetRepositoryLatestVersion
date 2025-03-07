@@ -1,4 +1,5 @@
 import re
+import sys
 import docker
 import semantic_version
 
@@ -100,7 +101,7 @@ def _find_latest_tag(tags: tuple, current_version: str = None) -> str:
 
 
 
-def get_last_tag(repo_public_url: str, current_tag: str = None) -> str | None:
+def get_last_tag(repo_public_url: str, current_tag: str = None, *args, **kwargs) -> str | None:
     """
     Interface for obtaining repository latest tag (version).
 
@@ -116,3 +117,7 @@ def get_last_tag(repo_public_url: str, current_tag: str = None) -> str | None:
     version_regex = _create_regex_from_current_tag(current_tag=current_tag)
     tags = _get_repository_tags(repo_public_url, version_regex)
     return _find_latest_tag(tags, current_tag)
+
+
+if __name__ == '__main__':
+    get_last_tag(*sys.argv[1:])
