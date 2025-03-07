@@ -1,10 +1,10 @@
 import re
 import sys
 import docker
+import logging
 import semantic_version
 
 from docker.errors import ContainerError
-
 
 def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
     """
@@ -48,7 +48,7 @@ def _create_regex_from_current_tag(current_tag: str = None) -> re.Pattern:
                          r'(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d'
                          r'*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0'
                          r'-9a-zA-Z-]+)*))?$')
-        print(f'Searching tags based on default semantic versioning regex')
+        logger.debug(f'Searching tags based on default semantic versioning regex')
     else:
         for char in current_tag:
             if char.isdigit():
@@ -57,7 +57,7 @@ def _create_regex_from_current_tag(current_tag: str = None) -> re.Pattern:
             else:
                 regex_pattern += char
         regex_pattern += '$'
-        print(f'Searching tags based on regex: {regex_pattern}')
+        logger.debug(f'Searching tags based on regex: {regex_pattern}')
     return re.compile(regex_pattern)
 
 
@@ -80,7 +80,7 @@ def _find_latest_tag(tags: tuple, current_version: str = None) -> str:
             try:
                 sem_ver_conv = semantic_version.Version.coerce(_tag)
             except ValueError:
-                print(f'Incomparable tag version: {_tag}')
+                logger.warning(f'Incomparable tag version: {_tag}')
         return sem_ver_conv
 
     current_version = current_version if current_version else '0.0.0'
@@ -95,8 +95,7 @@ def _find_latest_tag(tags: tuple, current_version: str = None) -> str:
 
     if latest_version == convert_to_sem_ver('0.0.0'):
         raise SystemExit('Latest tag not retrieved, obtained tags cannot be compared')
-    
-    print(f'Latest release found: {latest_tag}')
+
     return latest_tag
 
 
@@ -113,11 +112,20 @@ def get_last_tag(repo_public_url: str, current_tag: str = None, *args, **kwargs)
     :return: (str, None) Latest available version
     """
 
-    print(f'Downloading latest version for repository: {repo_public_url}')
+    logger.info(f'Downloading latest version for repository: {repo_public_url}')
     version_regex = _create_regex_from_current_tag(current_tag=current_tag)
     tags = _get_repository_tags(repo_public_url, version_regex)
-    return _find_latest_tag(tags, current_tag)
+    latest_tag = _find_latest_tag(tags, current_tag)
+    print(latest_tag)
 
 
 if __name__ == '__main__':
+
+    logger = logging.getLogger('get_last_tag')
+    logging.basicConfig(
+        stream=sys.stderr,
+        encoding='utf-8',
+        level=logging.DEBUG
+    )
+
     get_last_tag(*sys.argv[1:])
