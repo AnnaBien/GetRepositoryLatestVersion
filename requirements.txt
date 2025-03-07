@@ -1,2 +1,2 @@
 docker~=7.1.0
-semver~=3.0.4
+semantic-version~=2.10.0

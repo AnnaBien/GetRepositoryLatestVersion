@@ -1,6 +1,6 @@
 import re
-import semver
 import docker
+import semantic_version
 
 from docker.errors import ContainerError
 
@@ -32,24 +32,24 @@ def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
     return tuple(tags)
 
 
-def _create_regex_from_current_version(current_version: str = None) -> re.Pattern:
+def _create_regex_from_current_tag(current_tag: str = None) -> re.Pattern:
     """
-    Create regex dynamically based on provided current tag.
+    Create regex dynamically based on provided current_tag.
 
-    :param current_version: (str, Optional) Currently used repository version. If not provided default regex is used
+    :param current_tag: (str, Optional) Currently used repository version. If not provided default regex is used
     :return: (re.Pattern) Regex pattern
     """
 
     regex_pattern = '^'
 
-    if not current_version:
+    if not current_tag:
         regex_pattern = (r'^[v]{0,1}(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-'
                          r'(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d'
                          r'*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0'
                          r'-9a-zA-Z-]+)*))?$')
         print(f'Searching tags based on default semantic versioning regex')
     else:
-        for char in current_version:
+        for char in current_tag:
             if char.isdigit():
                 if regex_pattern[-1] != ')':
                     regex_pattern += r'(0|[1-9]\d*)'
@@ -60,55 +60,59 @@ def _create_regex_from_current_version(current_version: str = None) -> re.Patter
     return re.compile(regex_pattern)
 
 
-def _find_latest_version(tags: tuple, current_version: str = None) -> str | None:
+def _find_latest_tag(tags: tuple, current_version: str = None) -> str:
     """
-    Compare versions between tags following MAJOR.MINOR.PATCH style.
-    Note: Only versions compliant with Semantic Versioning 2.0.0 will be compared.
+    Compare tags and return the latest one.
+    Note: Versions not convertable to Semantic Versioning 2.0.0 will not be compared.
 
     :param tags: (tuple) Downloaded tags
     :param current_version: (str, Optional) Currently used tag
     :return: (str, None) Latest tag
     """
 
-    try:
-        latest_tag = semver.Version.parse(current_version)
-    except (ValueError, TypeError):
-        latest_tag = semver.Version.parse('0.0.0')
+    def convert_to_sem_ver(_tag: str) -> semantic_version.Version | None:
+        sem_ver_conv = None
+        _tag = _tag[1:] if _tag[0] == 'v' else _tag
+        try:
+            sem_ver_conv = semantic_version.Version(_tag)
+        except ValueError:
+            try:
+                sem_ver_conv = semantic_version.Version.coerce(_tag)
+            except ValueError:
+                print(f'Incomparable tag version: {_tag}')
+        return sem_ver_conv
+
+    current_version = current_version if current_version else '0.0.0'
+    latest_tag, latest_version = current_version, convert_to_sem_ver(current_version)
 
     for tag in tags:
-        try:
-            curr_tag = semver.Version.parse(tag[1:] if tag[0] == 'v' else tag)
-        except ValueError:
-            print(f'Incomparable tag version: {tag}')
+        tag_ver = convert_to_sem_ver(tag)
+        if not tag_ver:
             continue
-        if curr_tag.major > latest_tag.major:
-            latest_tag = curr_tag
-        elif curr_tag.major == latest_tag.major:
-            if curr_tag.minor > latest_tag.minor:
-                latest_tag = curr_tag
-            elif curr_tag.minor == latest_tag.minor:
-                if curr_tag.patch > latest_tag.patch:
-                    latest_tag = curr_tag
-                elif not curr_tag.prerelease:
-                    latest_tag = curr_tag
+        if tag_ver > latest_version:
+            latest_tag, latest_version = tag, tag_ver
 
-    if latest_tag == semver.Version.parse('0.0.0'):
-        print('Latest tag not retrieved, obtained tags cannot be compared')
-        return current_version
+    if latest_version == convert_to_sem_ver('0.0.0'):
+        raise SystemExit('Latest tag not retrieved, obtained tags cannot be compared')
+    
     print(f'Latest release found: {latest_tag}')
-    return str(latest_tag)
+    return latest_tag
 
 
-def get_last_tag(repo_public_url: str, current_version: str = None) -> str | None:
+
+def get_last_tag(repo_public_url: str, current_tag: str = None) -> str | None:
     """
     Interface for obtaining repository latest tag (version).
 
-    :param repo_public_url: (str) URL to repository. Defaults to dockerhub if not full URL path is provided.
-    :param current_version: (str, Optional) Currently used repository version
+    Note: If current_tag is provided only tags of the same type will be retrieved.
+          In other case only versions compliant with Semantic Versioning 2.0.0 will be retrieved.
+
+    :param repo_public_url: (str) URL to repository. Defaults to dockerhub if full URL path is not provided.
+    :param current_tag: (str, Optional) Currently used repository version
     :return: (str, None) Latest available version
     """
 
     print(f'Downloading latest version for repository: {repo_public_url}')
-    version_regex = _create_regex_from_current_version(current_version=current_version)
+    version_regex = _create_regex_from_current_tag(current_tag=current_tag)
     tags = _get_repository_tags(repo_public_url, version_regex)
-    return _find_latest_version(tags, current_version)
+    return _find_latest_tag(tags, current_tag)
