@@ -1,10 +1,21 @@
+"""
+Script that retrieves the latest release tag of a given repository.
+"""
+
 import re
 import sys
-import docker
 import logging
+import docker
 import semantic_version
 
 from docker.errors import ContainerError, DockerException
+
+logger = logging.getLogger('get_last_tag')
+logging.basicConfig(
+    stream=sys.stderr,
+    encoding='utf-8',
+    level=logging.DEBUG
+)
 
 def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
     """
@@ -24,10 +35,10 @@ def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
             tty=True,
             auto_remove=True
         )
-    except ContainerError:
-        raise SystemExit(f'Could not connect to the repository: {repo_url}')
-    except DockerException:
-        raise SystemExit('Could not run a contaier. Check if docker engine is running.')
+    except ContainerError as container_err:
+        raise SystemExit(f'Could not connect to the repository: {repo_url}') from container_err
+    except DockerException as docker_err:
+        raise SystemExit('Could not run a contaier. Check if docker engine is running.') from docker_err
 
     tags = [tag for tag in tags.decode("utf-8").split('\r\n') if tag_regex.match(tag)]
     if not tags:
@@ -50,7 +61,7 @@ def _create_regex_from_current_tag(current_tag: str = None) -> re.Pattern:
                          r'(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d'
                          r'*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0'
                          r'-9a-zA-Z-]+)*))?$')
-        logger.debug(f'Searching tags based on default semantic versioning regex')
+        logger.debug('Searching tags based on default semantic versioning regex')
     else:
         for char in current_tag:
             if char.isdigit():
@@ -104,7 +115,7 @@ def _find_latest_tag(tags: tuple, current_version: str = None) -> str:
 
 
 
-def get_last_tag(repo_public_url: str, current_tag: str = None, *args, **kwargs) -> str | None:
+def get_last_tag(repo_public_url: str, current_tag: str = None) -> str | None:
     """
     Interface for obtaining repository latest tag (version).
 
@@ -120,16 +131,11 @@ def get_last_tag(repo_public_url: str, current_tag: str = None, *args, **kwargs)
     version_regex = _create_regex_from_current_tag(current_tag=current_tag)
     tags = _get_repository_tags(repo_public_url, version_regex)
     latest_tag = _find_latest_tag(tags, current_tag)
-    print(latest_tag)
+    logger.info(f'Latest tag found: {latest_tag}')
+    return latest_tag
 
 
 if __name__ == '__main__':
 
-    logger = logging.getLogger('get_last_tag')
-    logging.basicConfig(
-        stream=sys.stderr,
-        encoding='utf-8',
-        level=logging.DEBUG
-    )
-
-    get_last_tag(*sys.argv[1:])
+    last_tag = get_last_tag(*sys.argv[1:3])
+    print(last_tag)
