@@ -4,7 +4,7 @@ import docker
 import logging
 import semantic_version
 
-from docker.errors import ContainerError
+from docker.errors import ContainerError, DockerException
 
 def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
     """
@@ -26,6 +26,8 @@ def _get_repository_tags(repo_url: str, tag_regex: re.Pattern) -> tuple:
         )
     except ContainerError:
         raise SystemExit(f'Could not connect to the repository: {repo_url}')
+    except DockerException:
+        raise SystemExit('Could not run a contaier. Check if docker engine is running.')
 
     tags = [tag for tag in tags.decode("utf-8").split('\r\n') if tag_regex.match(tag)]
     if not tags:
@@ -54,6 +56,8 @@ def _create_regex_from_current_tag(current_tag: str = None) -> re.Pattern:
             if char.isdigit():
                 if regex_pattern[-1] != ')':
                     regex_pattern += r'(0|[1-9]\d*)'
+            elif char == '.':
+                regex_pattern += '[.]'
             else:
                 regex_pattern += char
         regex_pattern += '$'
